@@ -1,0 +1,169 @@
+\documentclass[12pt,a4paper,titlepage,final]{article}
+
+% cestina a fonty
+\usepackage[czech]{babel}
+\usepackage[latin2]{inputenc}
+% balicky pro odkazy
+\usepackage[bookmarksopen,colorlinks,plainpages=false,urlcolor=blue,unicode]{hyperref}
+\usepackage{url}
+% obrazky
+\usepackage[dvipdf]{graphicx}
+% velikost stranky
+\usepackage[top=3.5cm, left=2.5cm, text={17cm, 24cm}, ignorefoot]{geometry}
+
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{program}
+\usepackage{bm}
+\usepackage{hhline}
+\usepackage{enumitem}
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% titulní strana
+
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+\def\authorA{Radim Kubi¹, \url{xkubis03@stud.fit.vutbr.cz}}
+\def\projname{Projekt è.~3\\Konverze obrazového formátu GIF na BMP}
+% !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+\input{title.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% obsah
+%\pagestyle{plain}
+%\pagenumbering{roman}
+%\setcounter{page}{1}
+%\tableofcontents
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% textova zprava
+\newpage
+\pagestyle{plain}
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Knihovna \emph{gif2bmp}} \label{knihovna}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Zdrojový kód je psán v~jazyce~C, nepou¾ívá roz¹íøení~z~C++ ani nevyu¾ívá jiných
+knihoven pracujících s~formáty \emph{GIF} nebo \emph{BMP}. Tabulky barev jsou
+øe¹eny vlastní implementací pøes struktury, které lze nalézt v~hlavièkovém
+souboru \texttt{gif2bmp.h}.
+
+Implementovaná knihovna \emph{gif2bmp} dává k~dispozici pouze pøevodní funkci
+\begin{verbatim}
+int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile).
+\end{verbatim}
+Pomocné funkce pro pøevod, práci se slovníkem a~funkce zapisující výsledný
+\emph{BMP} soubor nejsou z~rozhraní knihovny dostupné.
+
+Funkce \texttt{gif2bmp} podporuje soubory typu \emph{GIF}:
+
+\begin{itemize}
+  \item zakódované metodou LZW,
+  \item verze GIF89a,
+  \item 1--8 bitový formát,
+  \item prokládáné øádky,
+  \item globální tabulku barev,
+  \item lokální tabulku barev,
+  \item kombinaci globální a~lokální tabulky barev,
+  \item více obrazových blokù v~jednom souboru (vèetnì jejich pozicování),
+  \item pøevod animace -- výsledkem je pouze poslední snímek, pøedchozí snímky
+  by bylo mo¾né ukládat na koncích jednotlivých blokù.
+\end{itemize}
+
+Dal¹í roz¹iøující bloky \emph{GIF} formátu jsou pouze pøeskakovány a~nejsou
+do výsledného \emph{BMP} souboru nijak interpretovány. V~knihovnì lze po
+odkomentování jednotlivých øádkù pouze nechat vypisovat informace nacházející
+se v~tìchto blocích.
+
+Výsledkem pøevodu je nekomprimovaný obrazový soubor \emph{BMP} obsahující pouze
+hlavièky \texttt{BITMAPFILEHEADER} a~\texttt{BITMAPINFOHEADER}, následované
+zakódovanými obrazovými daty v~re¾imu \emph{TrueColor}, kde je ka¾dý pixel
+reprezentován pøímo svými \emph{RGB} hodnotami ulo¾enými ve~tøech bytech, tedy
+24\,bitù/pixel. Tento formát neobsahuje ¾ádnou globální paletu barev.
+
+Po pøevodu obsahuje struktura \texttt{gif2bmp}, která je jako první parametr
+konverzní funkce, záznam o~pøevodu -- velikost pùvodního \emph{GIF} souboru
+a~nového \emph{BMP} souboru.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Demonstraèní aplikace} \label{aplikace}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Aplikace \texttt{gif2bmp}, která vznikne pøelo¾ením zdrojových kódù pøíkazem
+\texttt{make}, demonstruje funkènost implementované knihovny. Zpracování
+vstupních argumentù vyu¾ívá funkci \texttt{getopt}. Pokud jsou zadány v¹echny
+potøebné parametry programu, aplikace provede pøevod souboru \emph{GIF}
+na \emph{BMP}.
+
+\newpage
+
+Pou¾ití aplikace:
+
+\begin{verbatim}
+    ./gif2bmp [-i input_file] [-o output_file] [-l log_file] [-h]
+
+        -h print help
+        -i input file name (GIF), default: stdin
+        -o output file name (BMP), default: stdout
+        -l log file name, default: without log file
+\end{verbatim}
+
+Pøi zadání argumentu \texttt{-l} je vytvoøen logovací soubor obsahující login
+øe¹itele, velikost vstupního \emph{GIF} a~výstupního \emph{BMP} souboru.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Algoritmus} \label{algoritmus}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Funkce \texttt{gif2bmp} zpracovává vstupní \emph{GIF} postupnì byte po bytu.
+Po rozkódování úvodní hlavièky souboru pokraèuje s~dal¹ími obsa¾enými bloky.
+
+Obrazová data se nacházejí v~\emph{image blocích} a~jsou zakódována
+pomocí LZW metody. Tato data jsou ukládána do pomocného dynamického pole, dokud
+není naèten byte s~hodnotou \texttt{0x00}, který oznamuje konec
+\emph{image bloku}.
+
+Jakmile je naèten koncový byte obrazových dat, provede se nad polem s~naètenými
+byty algoritmus dekódující LZW:
+
+\begin{enumerate}
+  \setlength{\itemsep}{2pt}
+  \item Inicializace promìnných.
+  \item Pokraèuj, dokud není zpracováno celé pomocné pole bytù, jinak ukonèi
+  algoritmus.
+  \item Pomocí maskování bitù nad byty v pomocném poli získej index barvy
+  následujícího pixelu dle délky LZW kódu.
+  \item Pokud je nový index hodnotou pro konec LZW dat, ukonèi algoritmus.
+  \item Pokud je nový index hodnotou \emph{clear kódu}:
+  \item[]
+    \begin{itemize}
+      \item Resetuj délku LZW kódu na minimální.
+      \item Pokraèuj bodem 2.
+    \end{itemize}
+  \item Pokud je zcela naplnìna tabulka pro nové indexy výstupních dat,
+  zvy¹ velikost LZW kódu o 1 a pokraèuj.
+  \item Pokud se jedná o první zpracovávaný index pro aktuální délku LZW kódu,
+  dej na výstup barvu dle tohoto indexu a pokraèuj bodem 2.
+  \item Pokud ji¾ existuje záznam se získaným indexem:
+  \item[]
+    \begin{itemize}
+      \item Dej na výstup hodnoty indexù tohoto záznamu.
+      \item Pøidej nový záznam s indexy.
+    \end{itemize}
+  \item Pokud záznam se získaným indexem NEexistuje:
+  \item[]
+    \begin{itemize}
+      \item Pøidej nový záznam s indexy.
+      \item Dej na výstup hodnoty indexù tohoto záznamu.
+    \end{itemize}
+  \item Pokraèuj bodem 2.
+\end{enumerate}
+
+\end{document}
